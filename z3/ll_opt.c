@@ -102,14 +102,12 @@ int ll_contains(ll_t *ll, int key)
 		pthread_spin_lock(&(curr->lock));
 		pthread_spin_lock(&(next->lock));
 		if (validate(curr,next,ll)) {
-			printf("contains mpika\n");
 			break;
 		}
 		else {
 			pthread_spin_unlock(&(next->lock));
 			pthread_spin_unlock(&(curr->lock));
 		}
-		printf("contains\n");
 	}
 	ret= (key == next->key);
 	pthread_spin_unlock(&(next->lock));
@@ -133,14 +131,12 @@ int ll_add(ll_t *ll, int key)
 		pthread_spin_lock(&(curr->lock));
 		pthread_spin_lock(&(next->lock));
 		if (validate(curr,next,ll)) {
-			printf("add mpika\n");
 			break;
 		}
 		else {
 			pthread_spin_unlock(&(next->lock));
 			pthread_spin_unlock(&(curr->lock));
 		}
-					printf("add\n");
 	}
 	if (next->key != key) {
 		ret = 1;
@@ -162,21 +158,19 @@ int ll_remove(ll_t *ll, int key)
 		curr=ll->head;
 		next=ll->head->next;
 		while (next->key < key) {
-			//if (key == next->key) break;
+			if (key == next->key) break;
 			curr=next;
 			next=next->next;
 		}
 		pthread_spin_lock(&(curr->lock));
 		pthread_spin_lock(&(next->lock));
 		if (validate(curr,next,ll)) {
-			printf("remove mpika\n");
 			break;
 		}
 		else {
 			pthread_spin_unlock(&(next->lock));
 			pthread_spin_unlock(&(curr->lock));
 		}
-		printf("remove\n");
 	}
 	if (key == next->key){
 		ret = 1;
