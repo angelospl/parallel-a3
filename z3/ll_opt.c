@@ -95,23 +95,24 @@ int ll_contains(ll_t *ll, int key)
 	while(1){
 		curr=ll->head;
 		next=ll->head->next;
-		while (next->key < key) {
+		while (next->key <= key) {
 			curr = next;
 			next = next->next;
 		}
 		pthread_spin_lock(&(curr->lock));
 		pthread_spin_lock(&(next->lock));
 		if (validate(curr,next,ll)) {
+			if(next->key == key) {
+				ret = 1;
+			}
+			//ret= (key == next->key);
+			pthread_spin_unlock(&(curr->lock));
+			pthread_spin_unlock(&(next->lock));
 			break;
 		}
-		else {
-			pthread_spin_unlock(&(next->lock));
-			pthread_spin_unlock(&(curr->lock));
-		}
+		pthread_spin_unlock(&(curr->lock));
+		pthread_spin_unlock(&(next->lock));
 	}
-	ret= (key == next->key);
-	pthread_spin_unlock(&(next->lock));
-	pthread_spin_unlock(&(curr->lock));
 	return ret;
 }
 
@@ -124,28 +125,29 @@ int ll_add(ll_t *ll, int key)
 	while (1) {
 		curr=ll->head;
 		next=ll->head->next;
-		while (next->key < key) {
+		while (next->key <= key) {
 			curr=next;
 			next=next->next;
 		}
 		pthread_spin_lock(&(curr->lock));
 		pthread_spin_lock(&(next->lock));
 		if (validate(curr,next,ll)) {
+			if (next->key != key) {
+				ret = 1;
+				new_node=ll_node_new(key);
+				new_node->next=next;
+				curr->next=new_node;
+			}
+			else {
+				ret = 0;
+			}
+			pthread_spin_unlock(&(curr->lock));
+			pthread_spin_unlock(&(next->lock));
 			break;
 		}
-		else {
-			pthread_spin_unlock(&(next->lock));
-			pthread_spin_unlock(&(curr->lock));
-		}
+		pthread_spin_unlock(&(curr->lock));
+		pthread_spin_unlock(&(next->lock));
 	}
-	if (next->key != key) {
-		ret = 1;
-		new_node=ll_node_new(key);
-		new_node->next=next;
-		curr->next=new_node;
-	}
-	pthread_spin_unlock(&(next->lock));
-	pthread_spin_unlock(&(curr->lock));
 	return ret;
 }
 
@@ -157,7 +159,7 @@ int ll_remove(ll_t *ll, int key)
 	while(1) {
 		curr=ll->head;
 		next=ll->head->next;
-		while (next->key < key) {
+		while (next->key <= key) {
 			if (key == next->key) break;
 			curr=next;
 			next=next->next;
@@ -165,22 +167,22 @@ int ll_remove(ll_t *ll, int key)
 		pthread_spin_lock(&(curr->lock));
 		pthread_spin_lock(&(next->lock));
 		if (validate(curr,next,ll)) {
+			if (key == next->key){
+				ret = 1;
+				curr->next = next->next;
+				pthread_spin_unlock(&(curr->lock));
+				pthread_spin_unlock(&(next->lock));
+				ll_node_free(next);
+			}
+			else {
+				ret = 0;
+				pthread_spin_unlock(&(curr->lock));
+				pthread_spin_unlock(&(next->lock));
+			}
 			break;
 		}
-		else {
-			pthread_spin_unlock(&(next->lock));
-			pthread_spin_unlock(&(curr->lock));
-		}
-	}
-	if (key == next->key){
-		ret = 1;
-		curr->next = next->next;
 		pthread_spin_unlock(&(curr->lock));
-		ll_node_free(next);
-	}
-	else {
 		pthread_spin_unlock(&(next->lock));
-		pthread_spin_unlock(&(curr->lock));
 	}
 	return ret;
 }
