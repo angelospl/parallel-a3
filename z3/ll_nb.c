@@ -107,7 +107,7 @@ int attempt_mark(ll_node_t* curr,int exp_key,int new_mark)
 	return 0;
 }
 
-window* find (ll_t *list,ll_node_t* node,int key)
+window* find (ll_node_t* head,int key)
 {
 	ll_node_t *pred,*curr,*succ;
 	int *marked;	//marked = false
@@ -116,7 +116,7 @@ window* find (ll_t *list,ll_node_t* node,int key)
 	int snip;
 	window *ret;
 	retry: while (1) {
-		pred = list->head;
+		pred = head;
 		curr = pred->next;
 		while (1) {
 			succ = get(curr->next,marked);
@@ -146,14 +146,27 @@ int ll_contains(ll_t *ll, int key)
 int ll_add(ll_t *ll, int key)
 {
 	int splice;
-	return 0;
+	ll_node_t *pred,*curr,*new_node;
+	while (1) {
+		window* win = find(ll->head,key);
+		pred = win->pred;
+		curr = win->curr;
+		if (curr->key == key) {
+			return 0;
+		}
+		else {
+			new_node=ll_node_new(key);
+			new_node->next=curr;
+			if (compare_and_set(&pred->next,curr,new_node,0,0)) return 1;
+		}
+	}
 }
 
 int ll_remove(ll_t *ll, int key)
 {
 	int snip;
 	while (1) {
-		window *win = find(ll,ll->head,key);
+		window *win = find(ll->head,key);
 		ll_node_t *pred,*curr,*succ;
 		pred = win->pred;
 		curr = win->curr;
