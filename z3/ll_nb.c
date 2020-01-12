@@ -78,22 +78,19 @@ void ll_free(ll_t *ll)
 ll_node_t* get(ll_node_t * node,int* marked)
 {
 	if (node!=NULL) {
-	__sync_lock_test_and_set(marked,node->flag);
+		__sync_lock_test_and_set(marked,node->flag);
 	}
+	else __sync_lock_test_and_set(marked,0);
 	return node;
 }
 
 int compare_and_set(ll_node_t** curr,ll_node_t* exp_key,ll_node_t* upd_key,int exp_mark,int upd_mark)
 {
 	int comp;
-	comp=__sync_bool_compare_and_swap(curr,exp_key,upd_key);
+	comp=__sync_bool_compare_and_swap(curr,exp_key,exp_key);
 	if (comp) {
-		if (__sync_bool_compare_and_swap(&((*curr)->flag),exp_mark,upd_mark)){
-			return 1;
-		}
-		else {
-			__sync_bool_compare_and_swap(&((*curr)->key),upd_key,exp_key);
-			return 0;
+		if (__sync_bool_compare_and_swap(curr,exp_key,upd_key)){
+			return __sync_bool_compare_and_swap(&(upd_key->flag),exp_mark,upd_mark);
 		}
 	}
 	return 0;
@@ -107,30 +104,29 @@ int attempt_mark(ll_node_t* curr,int exp_key,int new_mark)
 	return 0;
 }
 
-window* find (ll_node_t* head,int key)
+window* find (window* win,ll_node_t* head,int key)
 {
 	ll_node_t *pred,*curr,*succ;
 	int *marked;	//marked = false
 	marked=(int*)malloc(sizeof(int));
 	*marked=0;
 	int snip;
-	window *ret;
 	retry: while (1) {
 		pred = head;
-		curr = pred->next;
+		curr = head->next;
 		while (1) {
 			succ = get(curr->next,marked);
-			while (marked[0]) {
+			while (marked[0]) {	//fysikh diagrafh komvwn
 				snip = compare_and_set(&(pred->next),curr,succ,0,0);
 				if (!snip) goto retry;
+				ll_node_free(curr);
 				curr = succ;
 				succ = get(curr->next,marked);
 			}
 			if (curr->key >= key) {
-				ret  = malloc(sizeof(window));
-				ret->pred = pred;
-				ret->curr = curr;
-				return ret;
+				win->pred = pred;
+				win->curr = curr;
+				return win;
 			}
 			pred = curr;
 			curr = succ;
@@ -146,9 +142,10 @@ int ll_contains(ll_t *ll, int key)
 int ll_add(ll_t *ll, int key)
 {
 	int splice;
+	window* win=(window*)malloc(sizeof(window));
 	ll_node_t *pred,*curr,*new_node;
 	while (1) {
-		window* win = find(ll->head,key);
+	 	win = find(win,ll->head,key);
 		pred = win->pred;
 		curr = win->curr;
 		if (curr->key == key) {
@@ -156,7 +153,7 @@ int ll_add(ll_t *ll, int key)
 		}
 		else {
 			new_node=ll_node_new(key);
-			new_node->next=curr;
+			__sync_lock_test_and_set(&(new_node->next),curr);
 			if (compare_and_set(&pred->next,curr,new_node,0,0)) return 1;
 		}
 	}
@@ -165,8 +162,9 @@ int ll_add(ll_t *ll, int key)
 int ll_remove(ll_t *ll, int key)
 {
 	int snip;
+	window *win=(window*)malloc(sizeof(window));
 	while (1) {
-		window *win = find(ll->head,key);
+		win = find(win,ll->head,key);
 		ll_node_t *pred,*curr,*succ;
 		pred = win->pred;
 		curr = win->curr;
@@ -179,6 +177,7 @@ int ll_remove(ll_t *ll, int key)
 			snip = compare_and_set(&(curr->next),succ,succ,0,1);
 			if (!snip) continue;
 			compare_and_set(&(pred->next),curr,succ,0,0);
+			ll_node_free(curr);
 			free(win);
 			return 1;
 		}
@@ -200,4 +199,5 @@ void ll_print(ll_t *ll)
 		curr = curr->next;
 	}
 	printf(" ]\n");
+	fflush(stdout);
 }

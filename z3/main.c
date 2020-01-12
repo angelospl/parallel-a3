@@ -143,6 +143,7 @@ void *thread_fn(void *targ)
 		else
 			ll_remove(ll, key);
 		mydata->ops++;
+		//ll_print(ll);
 		for (i=0; i < 200; i++)
 			/* do nothing */;
 	}
