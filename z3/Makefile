@@ -1,10 +1,10 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pthread
+CFLAGS = -Wall -Wextra -g -pthread
 
 ## Remove some warnings.
 CFLAGS += -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
 
-all: linked_list fgl optim lazy
+all: linked_list fgl optim lazy nb
 
 ## Which linked list implementation to use?
 LL_FILE = ll_serial.c
@@ -14,6 +14,8 @@ FGL = ll_fgl.c
 OPT = ll_opt.c
 
 LAZY = ll_lazy.c
+
+NB= ll_nb.c
 
 ## Additional source files
 SRC_FILES = ../common/aff.c
@@ -30,5 +32,8 @@ optim: main.c ${OPT} ${SRC_FILES}
 lazy: main.c ${LAZY} ${SRC_FILES}
 	$(CC) $(CFLAGS) $^ -o $@
 
+nb: main.c ${NB} ${SRC_FILES}
+	$(CC) $(CFLAGS) $^ -o $@
+
 clean:
-	rm -f linked_list fgl optim lazy
+	rm -f linked_list fgl optim lazy nb

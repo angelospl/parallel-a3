@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 	printf("Nthreads: %d  Runtime(sec): %d  Workload: %d/%d/%d  Throughput(Kops/sec): %5.2lf\n",
 	        nthreads, RUNTIME, contains_pct, add_pct, remove_pct, throughout);
 
-//	ll_print(ll);
+  ll_print(ll);
 	ll_free(ll);
 	return EXIT_SUCCESS;
 }
@@ -142,7 +142,6 @@ void *thread_fn(void *targ)
 			ll_add(ll, key);
 		else
 			ll_remove(ll, key);
-
 		mydata->ops++;
 		for (i=0; i < 200; i++)
 			/* do nothing */;
