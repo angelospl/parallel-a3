@@ -1,14 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h> /* rand() */
 #include <limits.h>
+#include <stdint.h>
 
 #include "../common/alloc.h"
 #include "ll.h"
+#define TRUE 1
+#define FALSE 0
+#define OR_TRUE(p) ((ll_node_t *) ((uintptr_t) (p) | (uintptr_t) TRUE))	//pointer with last bit 1
+#define OR_FALSE(p) ((ll_node_t *) ((uintptr_t) (p) | (uintptr_t) FALSE))	//pointer with last bit 0
+#define AND_TRUE(p) ((ll_node_t *) ((uintptr_t) (p) & (uintptr_t) TRUE))	//return all with mark
+#define AND_FALSE(p) ((ll_node_t *) ((uintptr_t) (p) & (uintptr_t) FALSE))	//return pointer with mark 0
+#define LAST_ZERO(p) ((ll_node_t *) ((uintptr_t) (p) & (uintptr_t) ~TRUE))	//remove pointer bits return last bit
 
 typedef struct ll_node {
 	int key;
 	struct ll_node *next;
-	int flag;
 	/* other fields here? */
 } ll_node_t;
 
@@ -32,7 +39,6 @@ static ll_node_t *ll_node_new(int key)
 	XMALLOC(ret, 1);
 	ret->key = key;
 	ret->next = NULL;
-	ret->flag = 0;
 	/* Other initializations here? */
 
 	return ret;
@@ -75,53 +81,28 @@ void ll_free(ll_t *ll)
 	XFREE(ll);
 }
 
-ll_node_t* get(ll_node_t * node,int* marked)
-{
-	if (node!=NULL) {
-		__sync_lock_test_and_set(marked,node->flag);
-	}
-	else __sync_lock_test_and_set(marked,0);
-	return node;
-}
-
-int compare_and_set(ll_node_t** curr,ll_node_t* exp_key,ll_node_t* upd_key,int exp_mark,int upd_mark)
-{
-	int comp;
-	comp=__sync_bool_compare_and_swap(curr,exp_key,exp_key);
-	if (comp) {
-		if (__sync_bool_compare_and_swap(curr,exp_key,upd_key)){
-			return __sync_bool_compare_and_swap(&(upd_key->flag),exp_mark,upd_mark);
-		}
-	}
-	return 0;
-}
-
-int attempt_mark(ll_node_t* curr,int exp_key,int new_mark)
-{
-	if (__sync_bool_compare_and_swap(&curr->key,exp_key,exp_key)){
-		return __sync_lock_test_and_set(&curr->flag,new_mark);
-	}
-	return 0;
-}
-
 window* find (window* win,ll_node_t* head,int key)
 {
 	ll_node_t *pred,*curr,*succ;
-	int *marked;	//marked = false
-	marked=(int*)malloc(sizeof(int));
-	*marked=0;
+	pred=NULL;
+	curr=NULL;
+	succ=NULL;
+	int marked[]={0};	//marked = false
 	int snip;
 	retry: while (1) {
 		pred = head;
-		curr = head->next;
+		curr = LAST_ZERO(pred->next);
 		while (1) {
-			succ = get(curr->next,marked);
+			marked[0] = AND_TRUE(curr->next);				//atomic get
+			succ = LAST_ZERO(curr->next);
 			while (marked[0]) {	//fysikh diagrafh komvwn
-				snip = compare_and_set(&(pred->next),curr,succ,0,0);
+				snip = __sync_bool_compare_and_swap(&(pred->next),LAST_ZERO(pred->next),LAST_ZERO(pred->next))
+							&& __sync_bool_compare_and_swap(&(pred->next), curr, succ);
 				if (!snip) goto retry;
-				ll_node_free(curr);
 				curr = succ;
-				succ = get(curr->next,marked);
+				marked[0] = AND_TRUE(curr->next);
+				succ = LAST_ZERO(curr->next);
+				//ll_node_free(curr);
 			}
 			if (curr->key >= key) {
 				win->pred = pred;
@@ -136,7 +117,14 @@ window* find (window* win,ll_node_t* head,int key)
 
 int ll_contains(ll_t *ll, int key)
 {
-	return 0;
+	int marked[]={0};
+	ll_node_t *curr;
+	curr =  ll->head;
+	while (curr->key <key){
+		curr = LAST_ZERO(curr->next);
+	}
+	marked[0]=AND_TRUE(curr->next);
+	return (curr->key == key && !marked[0]);
 }
 
 int ll_add(ll_t *ll, int key)
@@ -153,8 +141,9 @@ int ll_add(ll_t *ll, int key)
 		}
 		else {
 			new_node=ll_node_new(key);
-			__sync_lock_test_and_set(&(new_node->next),curr);
-			if (compare_and_set(&pred->next,curr,new_node,0,0)) return 1;
+			new_node->next = curr;
+			if (__sync_bool_compare_and_swap(&pred->next, LAST_ZERO(pred->next), LAST_ZERO(pred->next))
+                && __sync_bool_compare_and_swap(&pred->next, curr, new_node)) return 1;
 		}
 	}
 }
@@ -169,16 +158,17 @@ int ll_remove(ll_t *ll, int key)
 		pred = win->pred;
 		curr = win->curr;
 		if (curr->key != key) {
-			free(win);
+			//free(win);
 			return 0;
 		}
 		else {
-			succ = curr->next;
-			snip = compare_and_set(&(curr->next),succ,succ,0,1);
+			succ = LAST_ZERO(curr->next);
+			snip = __sync_bool_compare_and_swap(&(curr->next),LAST_ZERO(succ),OR_TRUE(succ));
 			if (!snip) continue;
-			compare_and_set(&(pred->next),curr,succ,0,0);
-			ll_node_free(curr);
-			free(win);
+			__sync_bool_compare_and_swap(&pred->next, LAST_ZERO(pred->next), LAST_ZERO(pred->next))
+                && __sync_bool_compare_and_swap(&pred->next, curr, succ);
+			//ll_node_free(curr);
+			//free(win);
 			return 1;
 		}
 	}
